@@ -1,16 +1,22 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use file_handling::{
     input::reader::Reader,
     result::writer::JoinWriter,
     types::{InputRow, JoinRow},
 };
+use rand::Rng;
 
 const VARIANT: &str = "500k";
 
 pub fn run() {
+    let clock = Instant::now();
     run_simple_hash_join();
+    println!("Simple hash join took: {}ms", clock.elapsed().as_millis());
+
+    let clock = Instant::now();
     run_classic_hash_join();
+    println!("Classic hash join took: {}ms", clock.elapsed().as_millis());
 }
 
 fn run_simple_hash_join() {
@@ -70,6 +76,7 @@ fn run_classic_hash_join() {
     let mut writer = JoinWriter::create(path_out);
 
     let mut block = 0;
+    let mut row_count = 0;
 
     'out: loop {
         println!("Hashing block {}", block);
@@ -98,6 +105,7 @@ fn run_classic_hash_join() {
                 let hsh = blake3::hash(&id_s.to_ne_bytes()).to_string();
                 if let Some(rows) = map.get(&hsh) {
                     rows.iter().for_each(|&InputRow(_, val_r)| {
+                        row_count += 1;
                         writer.write(&JoinRow(id_s, val_s, val_r));
                     });
                 }
@@ -106,10 +114,12 @@ fn run_classic_hash_join() {
             break;
         }
     }
+    println!("Size of R |x| S: {} entries", row_count);
 
     println!("Finished");
 }
 
 fn running_low_on_memory() -> bool {
-    return false;
+    let mut rng = rand::thread_rng();
+    return rng.gen_ratio(1, 100_000);
 }
