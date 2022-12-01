@@ -7,7 +7,7 @@ edition = "2021"
 
 [lib]
 name = "file_handling"
-path = "src/lib/file_handling.rs"
+path = "src/lib/main.rs"
 
 [[bin]]
 name = "file_gen"

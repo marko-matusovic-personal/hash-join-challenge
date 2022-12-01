@@ -1,11 +1,14 @@
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, hash::BuildHasherDefault, time::Instant};
 
+use blake3;
 use file_handling::{
     input::reader::Reader,
     result::writer::JoinWriter,
     types::{InputRow, JoinRow},
 };
 use rand::Rng;
+
+type HashMapCustom<K, V> = HashMap<K, V, BuildHasherDefault<blake3::Hasher>>;
 
 const VARIANT: &str = "500k";
 
@@ -26,7 +29,8 @@ fn run_simple_hash_join() {
     let mut reader_r = Reader::open(&path_r);
     let mut reader_s = Reader::open(&path_s);
 
-    let mut map: HashMap<String, Vec<InputRow>> = HashMap::new();
+    // let mut map: HashMapCustom<u32, Vec<InputRow>> = HashMapCustom::default();
+    let mut map: HashMap<u32, Vec<InputRow>> = HashMap::new();
 
     let mut r_size: u32 = 0;
     let mut s_size: u32 = 0;
@@ -34,8 +38,7 @@ fn run_simple_hash_join() {
     loop {
         if let Some(InputRow(id, val)) = reader_r.read() {
             r_size += 1;
-            let hsh = blake3::hash(&id.to_ne_bytes()).to_string();
-            map.entry(hsh).or_insert(Vec::new()).push(InputRow(id, val));
+            map.entry(id).or_insert(Vec::new()).push(InputRow(id, val));
             continue;
         }
         break;
@@ -46,8 +49,7 @@ fn run_simple_hash_join() {
     loop {
         if let Some(InputRow(id_s, val_s)) = reader_s.read() {
             s_size += 1;
-            let hsh = blake3::hash(&id_s.to_ne_bytes()).to_string();
-            if let Some(rows) = map.get(&hsh) {
+            if let Some(rows) = map.get(&id_s) {
                 rows.iter()
                     .for_each(|&InputRow(_, val_r)| join.push(JoinRow(id_s, val_s, val_r)));
             }
@@ -71,7 +73,8 @@ fn run_classic_hash_join() {
     let mut reader_r = Reader::open(&path_r);
     let mut reader_s = Reader::open(&path_s);
 
-    let mut map: HashMap<String, Vec<InputRow>> = HashMap::new();
+    // let mut map: HashMapCustom<u32, Vec<InputRow>> = HashMapCustom::default();
+    let mut map: HashMap<u32, Vec<InputRow>> = HashMap::new();
 
     let mut writer = JoinWriter::create(path_out);
 
@@ -93,8 +96,7 @@ fn run_classic_hash_join() {
             }
             if let Some(InputRow(id, val)) = reader_r.read() {
                 block_size += 1;
-                let hsh = blake3::hash(&id.to_ne_bytes()).to_string();
-                map.entry(hsh).or_insert(Vec::new()).push(InputRow(id, val));
+                map.entry(id).or_insert(Vec::new()).push(InputRow(id, val));
                 continue;
             }
             break 'out;
@@ -102,8 +104,7 @@ fn run_classic_hash_join() {
 
         loop {
             if let Some(InputRow(id_s, val_s)) = reader_s.read() {
-                let hsh = blake3::hash(&id_s.to_ne_bytes()).to_string();
-                if let Some(rows) = map.get(&hsh) {
+                if let Some(rows) = map.get(&id_s) {
                     rows.iter().for_each(|&InputRow(_, val_r)| {
                         row_count += 1;
                         writer.write(&JoinRow(id_s, val_s, val_r));
